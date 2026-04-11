@@ -1,0 +1,952 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ CORE MODELS ============
+
+model User {
+  id                    String    @id @default(cuid())
+  clerkId               String    @unique
+  email                 String    @unique
+  firstName             String?
+  lastName              String?
+  displayName           String?
+  avatarUrl             String?
+  role                  Role      @default(CONSUMER)
+  bio                   String?
+  phone                 String?
+  location              String?
+  stripeCustomerId      String?   @unique
+  stripeConnectAccountId String?  @unique
+  stripeConnectStatus   ConnectStatus?
+  totalXP               Int       @default(0)
+  totalGems             Int       @default(0)
+  profileVisibility     Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  dogs                  Dog[]
+  purchases             Purchase[]
+  entitlements          Entitlement[]
+  reviews               Review[]
+  notifications         Notification[]
+  trainingSessions      TrainingSession[]
+  supportTickets        SupportTicket[]
+
+  // LMS Relations
+  lmsEntitlements        LmsUserEntitlement[]
+  lmsEnrollments         LmsEnrollment[]
+  lmsLessonProgress      LmsLessonProgress[]
+  lmsQuizAttempts        LmsQuizAttempt[]
+  lmsRoadmapProgress     LmsUserRoadmapProgress[]
+  lmsCertCandidacies     LmsCertCandidacy[]
+  lmsAuditLogs           LmsAuditLog[]
+
+  // Trainer-specific
+  courses               Course[]           @relation("TrainerCourses")
+  trainerSpecializations String[]
+  trainerCertifications  String[]
+  yearsExperience       Int?
+  businessName          String?
+  websiteUrl            String?
+
+  @@index([clerkId])
+  @@index([email])
+  @@index([role])
+}
+
+model Dog {
+  id                String    @id @default(cuid())
+  userId            String
+  name              String
+  breed             String?
+  age               Int?
+  weight            Float?
+  photoUrl          String?
+  temperament       String?
+  trainingGoals     String[]
+  experienceLevel   ExperienceLevel @default(BEGINNER)
+  totalXP           Int       @default(0)
+  level             Int       @default(1)
+  currentStreak     Int       @default(0)
+  longestStreak     Int       @default(0)
+  lastActivityDate  DateTime?
+  streakStartDate   DateTime?
+  currentCGPS       Float?
+  leaderboardTier   LeaderboardTier @default(PUP)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainingSessions  TrainingSession[]
+
+  @@index([userId])
+}
+
+// ============ CONTENT MODELS ============
+
+model Course {
+  id              String    @id @default(cuid())
+  trainerId       String?
+  title           String
+  description     String?
+  thumbnailUrl    String?
+  category        String?
+  difficulty      Difficulty @default(BEGINNER)
+  status          ContentStatus @default(DRAFT)
+  isProblemCourse Boolean   @default(false)
+  price           Float     @default(0)
+  salePrice       Float?
+  averageRating   Float?
+  studentCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  trainer         User?     @relation("TrainerCourses", fields: [trainerId], references: [id])
+  modules         Module[]
+  reviews         Review[]
+  purchases       Purchase[]
+  entitlements    Entitlement[]
+
+  // LMS Relations
+  lmsProductAccess    LmsProductCourseAccess[]
+  lmsEnrollments      LmsEnrollment[]
+  lmsCertCourses      LmsCertCourse[]
+  lmsCourseResources  LmsCourseResource[]
+
+  @@index([trainerId])
+  @@index([status])
+  @@index([category])
+}
+
+model Module {
+  id          String    @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id          String     @id @default(cuid())
+  moduleId    String
+  title       String
+  type        LessonType @default(TEXT)
+  content     Json?
+  videoUrl    String?
+  duration    Int?
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  module      Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  // LMS Relations
+  lmsQuiz             LmsQuiz?
+  lmsLessonProgress   LmsLessonProgress[]
+  lmsLessonResources  LmsLessonResource[]
+
+  @@index([moduleId])
+}
+
+// ============ COMMERCE MODELS ============
+
+model Purchase {
+  id                String    @id @default(cuid())
+  userId            String
+  courseId           String?
+  stripePaymentId   String?   @unique
+  amount            Float
+  platformFee       Float?
+  trainerPayout     Float?
+  status            PaymentStatus @default(PENDING)
+  createdAt         DateTime  @default(now())
+
+  user              User      @relation(fields: [userId], references: [id])
+  course            Course?   @relation(fields: [courseId], references: [id])
+
+  @@index([userId])
+  @@index([courseId])
+}
+
+model Entitlement {
+  id          String          @id @default(cuid())
+  userId      String
+  courseId     String?
+  contentType ContentType
+  contentId   String
+  grantedBy   GrantSource
+  isActive    Boolean         @default(true)
+  expiresAt   DateTime?
+  grantedAt   DateTime        @default(now())
+
+  user        User            @relation(fields: [userId], references: [id])
+  course      Course?         @relation(fields: [courseId], references: [id])
+
+  @@index([userId])
+  @@index([contentId])
+  @@unique([userId, contentType, contentId])
+}
+
+// ============ TRAINING & GENIUS BRAIN ============
+
+model TrainingSession {
+  id                String    @id @default(cuid())
+  userId            String
+  dogId             String
+  lessonId          String?
+  environmentType   String?
+  performanceScore  Float?
+  regulationScore   Float?
+  environmentScore  Float?
+  consistencyScore  Float?
+  cgpsTotal         Float?
+  successRate       Float?
+  duration          Int?
+  decision          Decision?
+  decisionReason    String?
+  xpEarned          Int       @default(0)
+  createdAt         DateTime  @default(now())
+
+  user              User      @relation(fields: [userId], references: [id])
+  dog               Dog       @relation(fields: [dogId], references: [id])
+
+  @@index([userId])
+  @@index([dogId])
+  @@index([createdAt])
+}
+
+// ============ SOCIAL & NOTIFICATIONS ============
+
+model Review {
+  id              String    @id @default(cuid())
+  userId          String
+  courseId         String
+  rating          Int
+  title           String?
+  body            String?
+  trainerResponse String?
+  helpfulCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+
+  user            User      @relation(fields: [userId], references: [id])
+  course          Course    @relation(fields: [courseId], references: [id])
+
+  @@index([courseId])
+  @@unique([userId, courseId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+model SupportTicket {
+  id              String        @id @default(cuid())
+  userId          String
+  subject         String
+  description     String
+  category        TicketCategory
+  status          TicketStatus  @default(OPEN)
+  priority        TicketPriority @default(MEDIUM)
+  assignedToId    String?
+  createdAt       DateTime      @default(now())
+  resolvedAt      DateTime?
+
+  user            User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ============ PLATFORM CONFIG ============
+
+model PlatformConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+}
+
+// ============ ENUMS ============
+
+enum Role {
+  CONSUMER
+  TRAINER
+  ADMIN
+}
+
+enum ConnectStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum LeaderboardTier {
+  PUP
+  HANDLER
+  TRAINER_TIER
+  COACH
+  PRO
+  MASTER
+  LEGEND
+  CHAMPION
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  ALL_LEVELS
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LessonType {
+  VIDEO
+  TEXT
+  QUIZ
+  EXERCISE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum ContentType {
+  COURSE
+  MODULE
+  LESSON
+  PRODUCT
+}
+
+enum GrantSource {
+  PURCHASE
+  SUBSCRIPTION
+  ADMIN_GRANT
+  PROMO_CODE
+}
+
+enum Decision {
+  PROGRESS
+  REPEAT
+  VARIATION
+  REGRESS
+  REGULATION_TRAINING
+}
+
+enum NotificationType {
+  LEVEL_UP
+  STREAK_REMINDER
+  STREAK_LOST
+  QUEST_COMPLETE
+  BADGE_EARNED
+  FRIEND_REQUEST
+  LEADERBOARD_PROMOTION
+  LEADERBOARD_DEMOTION
+  LEADERBOARD_AT_RISK
+  SEASON_START
+  SEASON_END
+  INACTIVITY_NUDGE
+  PURCHASE_CONFIRMATION
+  GENERAL
+}
+
+enum TicketCategory {
+  BUG
+  BILLING
+  ACCOUNT
+  CONTENT
+  OTHER
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ============ LMS ENUMS ============
+
+enum CompletionRule {
+  MANUAL
+  VIDEO_THRESHOLD
+  QUIZ_PASS
+  DOWNLOAD_ACK
+  ALL_REQUIRED
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  MULTI_SELECT
+  TRUE_FALSE
+  SHORT_ANSWER
+  MATCHING
+  ORDERING
+}
+
+enum FeedbackMode {
+  AFTER_EACH
+  AFTER_SUBMIT
+  NONE
+}
+
+enum RoadmapStepType {
+  COURSE
+  MODULE
+  LESSON
+  QUIZ
+  RESOURCE
+  CERTIFICATION
+  MILESTONE
+  EXTERNAL_LINK
+}
+
+enum CertificationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  EXAM_ELIGIBLE
+  EXAM_IN_PROGRESS
+  PASSED
+  FAILED
+  EXPIRED
+  REVOKED
+}
+
+enum ResourceType {
+  PDF
+  WORKSHEET
+  TEMPLATE
+  AUDIO
+  CHECKLIST
+  GUIDE
+  EXTERNAL_LINK
+  OTHER
+}
+
+enum WebhookStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DUPLICATE
+}
+
+enum EntitlementSource {
+  MANUAL
+  SHOPIFY
+  SAMCART
+  STRIPE
+  KAJABI
+  THRIVECART
+  ZAPIER
+  MAKE
+  API
+}
+
+// ============ LMS MODELS ============
+
+// LMS Product & Access Control
+model LmsProduct {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entitlements     LmsUserEntitlement[]
+  courseAccess      LmsProductCourseAccess[]
+  certAccess       LmsProductCertAccess[]
+  roadmapAccess    LmsProductRoadmapAccess[]
+}
+
+model LmsUserEntitlement {
+  id          String  @id @default(cuid())
+  userId      String
+  productId   String
+  source      EntitlementSource @default(MANUAL)
+  sourceRef   String?
+  grantedAt   DateTime @default(now())
+  expiresAt   DateTime?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     LmsProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model LmsProductCourseAccess {
+  id        String  @id @default(cuid())
+  productId String
+  courseId   String
+
+  product   LmsProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, courseId])
+}
+
+model LmsProductCertAccess {
+  id              String  @id @default(cuid())
+  productId       String
+  certificationId String
+
+  product       LmsProduct      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  certification LmsCertification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, certificationId])
+}
+
+model LmsProductRoadmapAccess {
+  id        String  @id @default(cuid())
+  productId String
+  roadmapId String
+
+  product   LmsProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  roadmap   LmsRoadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, roadmapId])
+}
+
+// LMS Enrollment & Progress
+model LmsEnrollment {
+  id            String    @id @default(cuid())
+  userId        String
+  courseId       String
+  progress      Float     @default(0)
+  enrolledAt    DateTime  @default(now())
+  completedAt   DateTime?
+  lastAccessedAt DateTime?
+  lastLessonId  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model LmsLessonProgress {
+  id              String    @id @default(cuid())
+  userId          String
+  lessonId        String
+  isCompleted     Boolean   @default(false)
+  completedAt     DateTime?
+  videoWatchedPct Float?    @default(0)
+  startedAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([lessonId])
+}
+
+// LMS Quizzes
+model LmsQuiz {
+  id                String      @id @default(cuid())
+  lessonId          String?     @unique
+  certificationId   String?
+  title             String
+  description       String?
+  passingScore      Float       @default(0.7)
+  maxAttempts       Int?
+  cooldownMinutes   Int?
+  timeLimitMinutes  Int?
+  isRequired        Boolean     @default(false)
+  shuffleQuestions  Boolean     @default(false)
+  showFeedback      FeedbackMode @default(AFTER_EACH)
+  questionBankId    String?
+  questionCount     Int?
+  status            ContentStatus @default(DRAFT)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  lesson        Lesson?          @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  certification LmsCertification? @relation(fields: [certificationId], references: [id], onDelete: SetNull)
+  questionBank  LmsQuestionBank? @relation(fields: [questionBankId], references: [id])
+  questions     LmsQuizQuestion[]
+  attempts      LmsQuizAttempt[]
+
+  @@index([lessonId])
+  @@index([certificationId])
+}
+
+model LmsQuestionBank {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items   LmsQuestionBankItem[]
+  quizzes LmsQuiz[]
+}
+
+model LmsQuizQuestion {
+  id            String       @id @default(cuid())
+  quizId        String?
+  type          QuestionType
+  questionText  String
+  questionMedia String?
+  options       Json?
+  correctAnswer String?
+  matchingPairs Json?
+  orderingItems Json?
+  explanation   String?
+  points        Float        @default(1)
+  sortOrder     Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  quiz      LmsQuiz?              @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  bankItems LmsQuestionBankItem[]
+
+  @@index([quizId])
+}
+
+model LmsQuestionBankItem {
+  id         String  @id @default(cuid())
+  bankId     String
+  questionId String
+
+  bank     LmsQuestionBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  question LmsQuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([bankId, questionId])
+}
+
+model LmsQuizAttempt {
+  id            String    @id @default(cuid())
+  userId        String
+  quizId        String
+  score         Float?
+  passed        Boolean?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  answers       Json
+  attemptNumber Int       @default(1)
+  timeSpentSec  Int?
+
+  user User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz LmsQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([userId, quizId])
+}
+
+// LMS Roadmaps
+model LmsRoadmap {
+  id           String        @id @default(cuid())
+  title        String
+  slug         String        @unique
+  description  String?
+  thumbnailUrl String?
+  status       ContentStatus @default(DRAFT)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  publishedAt  DateTime?
+
+  steps         LmsRoadmapStep[]
+  userProgress  LmsUserRoadmapProgress[]
+  productAccess LmsProductRoadmapAccess[]
+}
+
+model LmsRoadmapStep {
+  id                  String          @id @default(cuid())
+  roadmapId           String
+  title               String
+  description         String?
+  stepType            RoadmapStepType
+  referenceId         String?
+  sortOrder           Int             @default(0)
+  isMilestone         Boolean         @default(false)
+  isRequired          Boolean         @default(true)
+  prerequisiteStepIds String[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  roadmap      LmsRoadmap                @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  stepProgress LmsUserRoadmapStepProgress[]
+
+  @@index([roadmapId])
+}
+
+model LmsUserRoadmapProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  roadmapId   String
+  progress    Float     @default(0)
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roadmap      LmsRoadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  stepProgress LmsUserRoadmapStepProgress[]
+
+  @@unique([userId, roadmapId])
+  @@index([userId])
+}
+
+model LmsUserRoadmapStepProgress {
+  id                    String    @id @default(cuid())
+  userRoadmapProgressId String
+  stepId                String
+  isCompleted           Boolean   @default(false)
+  completedAt           DateTime?
+  isUnlocked            Boolean   @default(false)
+
+  userRoadmapProgress LmsUserRoadmapProgress @relation(fields: [userRoadmapProgressId], references: [id], onDelete: Cascade)
+  step                LmsRoadmapStep         @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@unique([userRoadmapProgressId, stepId])
+}
+
+// LMS Certifications
+model LmsCertification {
+  id             String        @id @default(cuid())
+  title          String
+  slug           String        @unique
+  description    String?
+  overview       String?
+  thumbnailUrl   String?
+  validityMonths Int?
+  status         ContentStatus @default(DRAFT)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  publishedAt    DateTime?
+
+  prerequisites   LmsCertPrerequisite[]
+  requiredCourses LmsCertCourse[]
+  exams           LmsQuiz[]
+  candidacies     LmsCertCandidacy[]
+  productAccess   LmsProductCertAccess[]
+}
+
+model LmsCertPrerequisite {
+  id              String  @id @default(cuid())
+  certificationId String
+  type            ContentType
+  referenceId     String
+  description     String?
+
+  certification LmsCertification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+
+  @@unique([certificationId, type, referenceId])
+}
+
+model LmsCertCourse {
+  id              String  @id @default(cuid())
+  certificationId String
+  courseId         String
+  isRequired      Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  certification LmsCertification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  course        Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([certificationId, courseId])
+}
+
+model LmsCertCandidacy {
+  id              String              @id @default(cuid())
+  userId          String
+  certificationId String
+  status          CertificationStatus @default(NOT_STARTED)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  passedAt        DateTime?
+  expiresAt       DateTime?
+  certificateUrl  String?
+  certificateCode String?             @unique
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  certification LmsCertification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, certificationId])
+  @@index([userId])
+}
+
+// LMS Resources
+model LmsResource {
+  id          String       @id @default(cuid())
+  title       String
+  slug        String       @unique
+  description String?
+  type        ResourceType
+  fileUrl     String?
+  externalUrl String?
+  fileSizeBytes Int?
+  mimeType    String?
+  isGlobal    Boolean      @default(false)
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  tags            LmsResourceTag[]
+  courseResources  LmsCourseResource[]
+  lessonResources LmsLessonResource[]
+}
+
+model LmsResourceTag {
+  id         String  @id @default(cuid())
+  resourceId String
+  tag        String
+
+  resource LmsResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceId, tag])
+  @@index([tag])
+}
+
+model LmsCourseResource {
+  id         String @id @default(cuid())
+  courseId    String
+  resourceId String
+
+  course   Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  resource LmsResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, resourceId])
+}
+
+model LmsLessonResource {
+  id         String @id @default(cuid())
+  lessonId   String
+  resourceId String
+
+  lesson   Lesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  resource LmsResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, resourceId])
+}
+
+// LMS Community (lightweight v1)
+model LmsAnnouncement {
+  id          String        @id @default(cuid())
+  title       String
+  content     String
+  authorId    String
+  isPinned    Boolean       @default(false)
+  status      ContentStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model LmsCommunityLink {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+  url         String
+  iconUrl     String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// LMS Audit & Integration
+model LmsAuditLog {
+  id         String  @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  source     String  @default("system")
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model LmsWebhookEvent {
+  id             String        @id @default(cuid())
+  source         String
+  eventType      String
+  payload        Json
+  idempotencyKey String        @unique
+  status         WebhookStatus @default(PENDING)
+  processedAt    DateTime?
+  errorMessage   String?
+  retryCount     Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([idempotencyKey])
+  @@index([status])
+}
+
+model LmsApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  keyHash     String    @unique
+  prefix      String    @unique
+  permissions String[]
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  createdBy   String
+}
