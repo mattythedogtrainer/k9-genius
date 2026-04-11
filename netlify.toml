@@ -1,0 +1,9 @@
+[build]
+  command = "npm install --legacy-peer-deps && cd apps/lms && npm run build"
+  publish = "apps/lms/.next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
