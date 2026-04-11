@@ -360,13 +360,3 @@ export const ERROR_CODE_STATUS_MAP: Record<string, number> = {
   SERVICE_UNAVAILABLE: 503,
 } as const;
 
-// ============ EXPORT TYPES ============
-
-export type {
-  EnrollmentWebhookPayload,
-  WebhookResponse,
-  GeneratedApiKey,
-  WebhookEvent,
-  UserEntitlementData,
-  AuditLogEntry,
-};
