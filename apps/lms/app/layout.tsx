@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { TRPCProvider } from '@/lib/trpc-provider';
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'K9 Design System - Learning Platform',
@@ -15,9 +15,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-lms-bg text-teal-900 antialiased">
-        <TRPCProvider>
+        <Providers>
           {children}
-        </TRPCProvider>
+        </Providers>
       </body>
     </html>
   );

@@ -10,3 +10,6 @@ export { collections, subcollection } from './collections';
 
 // Types
 export * from './types';
+
+// Authentication helpers
+export * from './auth-helpers';
