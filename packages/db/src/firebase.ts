@@ -14,8 +14,10 @@ function getAdminApp() {
     return getApps()[0];
   }
 
-  // In development without service account, use project ID only
-  if (!serviceAccount.clientEmail) {
+  // Without a full service account (missing clientEmail or privateKey),
+  // fall back to project-ID-only init. This allows builds and client-side
+  // usage to succeed even without a service account private key.
+  if (!serviceAccount.clientEmail || !serviceAccount.privateKey) {
     return initializeApp({ projectId: 'k9-genius-bd0cb' });
   }
 
