@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { clientAuth, clientDb } from '@k9-genius/db';
+import { clientAuth, clientDb } from '@k9-genius/db/client';
 
 interface AuthContextType {
   user: User | null;

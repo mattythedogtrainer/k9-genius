@@ -23,7 +23,7 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
           url: `${getBaseUrl()}/api/trpc`,
           transformer: superjson,
           async headers() {
-            const { getIdToken } = await import('@k9-genius/db');
+            const { getIdToken } = await import('@k9-genius/db/client');
             const token = await getIdToken();
             return token ? { authorization: `Bearer ${token}` } : {};
           },

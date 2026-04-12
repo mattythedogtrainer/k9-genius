@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { signUpWithEmail, signInWithGoogle, signInWithApple } from '@k9-genius/db';
+import { signUpWithEmail, signInWithGoogle, signInWithApple } from '@k9-genius/db/client';
 
 export default function SignupPage() {
   const router = useRouter();

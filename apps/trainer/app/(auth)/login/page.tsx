@@ -7,8 +7,9 @@ import {
   signInWithGoogle,
   signInWithApple,
   signOutUser,
-} from '@k9-genius/db/auth-helpers';
-import { clientAuth, clientDb } from '@k9-genius/db';
+  clientAuth,
+  clientDb,
+} from '@k9-genius/db/client';
 import { doc, getDoc } from 'firebase/firestore';
 
 export default function TrainerLoginPage() {
