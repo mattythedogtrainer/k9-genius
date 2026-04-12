@@ -1,17 +1,41 @@
+import { FirestoreDataConverter } from 'firebase-admin/firestore';
 import { db } from './firebase';
+import {
+  User,
+  Dog,
+  Course,
+  Module,
+  Lesson,
+  Purchase,
+  Entitlement,
+  TrainingSession,
+  Review,
+  Notification,
+} from './types';
+
+// Helper to create a Firestore converter for any type
+function createConverter<T>(): FirestoreDataConverter<T> {
+  return {
+    toFirestore: (data: T) => data as FirebaseFirestore.DocumentData,
+    fromFirestore: (snapshot: FirebaseFirestore.QueryDocumentSnapshot) => ({
+      id: snapshot.id,
+      ...snapshot.data(),
+    }) as unknown as T,
+  };
+}
 
 // Collection references
 export const collections = {
-  users: db.collection('users'),
-  dogs: db.collection('dogs'),
-  courses: db.collection('courses'),
-  modules: db.collection('modules'),
-  lessons: db.collection('lessons'),
-  purchases: db.collection('purchases'),
-  entitlements: db.collection('entitlements'),
-  trainingSessions: db.collection('trainingSessions'),
-  reviews: db.collection('reviews'),
-  notifications: db.collection('notifications'),
+  users: db.collection('users').withConverter(createConverter<User>()),
+  dogs: db.collection('dogs').withConverter(createConverter<Dog>()),
+  courses: db.collection('courses').withConverter(createConverter<Course>()),
+  modules: db.collection('modules').withConverter(createConverter<Module>()),
+  lessons: db.collection('lessons').withConverter(createConverter<Lesson>()),
+  purchases: db.collection('purchases').withConverter(createConverter<Purchase>()),
+  entitlements: db.collection('entitlements').withConverter(createConverter<Entitlement>()),
+  trainingSessions: db.collection('trainingSessions').withConverter(createConverter<TrainingSession>()),
+  reviews: db.collection('reviews').withConverter(createConverter<Review>()),
+  notifications: db.collection('notifications').withConverter(createConverter<Notification>()),
   supportTickets: db.collection('supportTickets'),
   platformConfig: db.collection('platformConfig'),
   // Leaderboard
