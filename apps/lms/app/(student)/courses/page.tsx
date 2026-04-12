@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { trpc } from '@/lib/trpc';
 
 // Types
 type Category = 'All Courses' | 'Obedience' | 'Agility' | 'Behavior' | 'Puppy Training' | 'Service Dogs' | 'Therapy Dogs';
@@ -9,141 +10,56 @@ type Difficulty = 'All' | 'Beginner' | 'Intermediate' | 'Advanced';
 type SortOption = 'Most Popular' | 'Newest' | 'Highest Rated' | 'Price: Low to High';
 type ViewMode = 'grid' | 'list';
 
-interface Course {
+interface EnrichedCourse {
   id: string;
-  slug: string;
   title: string;
-  description: string;
-  category: Category;
-  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  description?: string;
+  category?: Category;
+  difficulty?: string;
   modules: number;
   hours: number;
   rating: number;
   reviewCount: number;
   enrolled: number;
-  badge?: 'New' | 'Popular' | 'Advanced';
   isEnrolled: boolean;
   progress?: number;
   gradientFrom: string;
   gradientTo: string;
 }
 
-// Mock data — 12 courses
-const allCourses: Course[] = [
-  {
-    id: '1', slug: 'canine-behavior-basics',
-    title: 'Foundation Course: Canine Behavior Basics',
-    description: 'Master the core principles of canine behavior science and the K9 Genius approach to training.',
-    category: 'Behavior', difficulty: 'Beginner', modules: 6, hours: 12,
-    rating: 4.8, reviewCount: 342, enrolled: 1240, badge: 'Popular',
-    isEnrolled: true, progress: 65,
-    gradientFrom: '#1E4F4F', gradientTo: '#A7B8AE',
-  },
-  {
-    id: '2', slug: 'advanced-obedience-training',
-    title: 'Advanced Obedience Training',
-    description: 'Take your obedience training to the next level with advanced commands, off-leash reliability, and competition prep.',
-    category: 'Obedience', difficulty: 'Advanced', modules: 8, hours: 18,
-    rating: 4.9, reviewCount: 187, enrolled: 856, badge: 'Advanced',
-    isEnrolled: true, progress: 35,
-    gradientFrom: '#0F2F2F', gradientTo: '#1E4F4F',
-  },
-  {
-    id: '3', slug: 'puppy-development-early-learning',
-    title: 'Puppy Development & Early Learning',
-    description: 'Comprehensive puppy training covering developmental stages, socialization windows, and foundation behaviors.',
-    category: 'Puppy Training', difficulty: 'Beginner', modules: 5, hours: 10,
-    rating: 4.7, reviewCount: 512, enrolled: 2100, badge: 'Popular',
-    isEnrolled: false,
-    gradientFrom: '#E58C73', gradientTo: '#F4A99A',
-  },
-  {
-    id: '4', slug: 'agility-fundamentals',
-    title: 'Agility Fundamentals',
-    description: 'Build confidence and coordination through foundational agility exercises and obstacle introduction.',
-    category: 'Agility', difficulty: 'Beginner', modules: 7, hours: 14,
-    rating: 4.6, reviewCount: 203, enrolled: 920, badge: 'New',
-    isEnrolled: false,
-    gradientFrom: '#A7B8AE', gradientTo: '#1E4F4F',
-  },
-  {
-    id: '5', slug: 'reactivity-management',
-    title: 'Advanced Reactivity Management',
-    description: 'Learn evidence-based protocols for managing and reducing reactivity in dogs of all breeds.',
-    category: 'Behavior', difficulty: 'Advanced', modules: 8, hours: 16,
-    rating: 4.9, reviewCount: 156, enrolled: 645,
-    isEnrolled: false,
-    gradientFrom: '#C46C55', gradientTo: '#E58C73',
-  },
-  {
-    id: '6', slug: 'service-dog-foundation',
-    title: 'Service Dog Foundation Training',
-    description: 'Essential skills and public access training for service dog candidates and their handlers.',
-    category: 'Service Dogs', difficulty: 'Intermediate', modules: 10, hours: 24,
-    rating: 4.8, reviewCount: 98, enrolled: 410, badge: 'New',
-    isEnrolled: false,
-    gradientFrom: '#1E4F4F', gradientTo: '#0F2F2F',
-  },
-  {
-    id: '7', slug: 'therapy-dog-certification-prep',
-    title: 'Therapy Dog Certification Prep',
-    description: 'Prepare your dog for therapy work certification with temperament evaluation and handler training.',
-    category: 'Therapy Dogs', difficulty: 'Intermediate', modules: 6, hours: 12,
-    rating: 4.5, reviewCount: 134, enrolled: 578,
-    isEnrolled: true, progress: 100,
-    gradientFrom: '#F4A99A', gradientTo: '#E58C73',
-  },
-  {
-    id: '8', slug: 'competitive-agility',
-    title: 'Competitive Agility Mastery',
-    description: 'Advanced course sequencing, speed training, and competition strategies for agility enthusiasts.',
-    category: 'Agility', difficulty: 'Advanced', modules: 9, hours: 20,
-    rating: 4.7, reviewCount: 89, enrolled: 320, badge: 'Advanced',
-    isEnrolled: false,
-    gradientFrom: '#0F2F2F', gradientTo: '#A7B8AE',
-  },
-  {
-    id: '9', slug: 'puppy-socialization-masterclass',
-    title: 'Puppy Socialization Masterclass',
-    description: 'Critical period socialization protocols to build confident, well-adjusted adult dogs.',
-    category: 'Puppy Training', difficulty: 'Beginner', modules: 4, hours: 8,
-    rating: 4.8, reviewCount: 267, enrolled: 1580,
-    isEnrolled: false,
-    gradientFrom: '#E58C73', gradientTo: '#1E4F4F',
-  },
-  {
-    id: '10', slug: 'obedience-competition-prep',
-    title: 'Obedience Competition Prep',
-    description: 'Precision heeling, retrieves, and directed exercises for AKC and UKC obedience trials.',
-    category: 'Obedience', difficulty: 'Advanced', modules: 8, hours: 22,
-    rating: 4.6, reviewCount: 74, enrolled: 290,
-    isEnrolled: false,
-    gradientFrom: '#1E4F4F', gradientTo: '#C46C55',
-  },
-  {
-    id: '11', slug: 'resource-guarding-protocols',
-    title: 'Resource Guarding Protocols',
-    description: 'Assessment and modification protocols for resource guarding behaviors in dogs.',
-    category: 'Behavior', difficulty: 'Intermediate', modules: 4, hours: 8,
-    rating: 4.4, reviewCount: 112, enrolled: 480,
-    isEnrolled: true, progress: 10,
-    gradientFrom: '#A7B8AE', gradientTo: '#E58C73',
-  },
-  {
-    id: '12', slug: 'service-dog-public-access',
-    title: 'Service Dog: Public Access Advanced',
-    description: 'Advanced public access scenarios, task training, and legal rights for service dog teams.',
-    category: 'Service Dogs', difficulty: 'Advanced', modules: 7, hours: 16,
-    rating: 4.9, reviewCount: 56, enrolled: 195,
-    isEnrolled: false,
-    gradientFrom: '#0F2F2F', gradientTo: '#E58C73',
-  },
-];
-
 const categories: Category[] = ['All Courses', 'Obedience', 'Agility', 'Behavior', 'Puppy Training', 'Service Dogs', 'Therapy Dogs'];
 const difficulties: Difficulty[] = ['All', 'Beginner', 'Intermediate', 'Advanced'];
 const sortOptions: SortOption[] = ['Most Popular', 'Newest', 'Highest Rated', 'Price: Low to High'];
 const ITEMS_PER_PAGE = 9;
+
+// Gradient palette for courses
+const gradientPalette = [
+  { from: '#1E4F4F', to: '#A7B8AE' },
+  { from: '#0F2F2F', to: '#1E4F4F' },
+  { from: '#E58C73', to: '#F4A99A' },
+  { from: '#A7B8AE', to: '#1E4F4F' },
+  { from: '#C46C55', to: '#E58C73' },
+  { from: '#1E4F4F', to: '#0F2F2F' },
+  { from: '#F4A99A', to: '#E58C73' },
+  { from: '#0F2F2F', to: '#A7B8AE' },
+];
+
+// Map display difficulty to API difficulty
+const difficultyToAPI = (diff: Difficulty): 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | undefined => {
+  if (diff === 'All') return undefined;
+  return diff.toUpperCase() as 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+};
+
+// Map API difficulty to display difficulty
+const difficultyFromAPI = (diff: string): string => {
+  return diff.charAt(0) + diff.slice(1).toLowerCase();
+};
+
+// Assign gradient based on course ID (deterministic)
+const getGradient = (courseId: string) => {
+  const hash = courseId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return gradientPalette[hash % gradientPalette.length];
+};
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -158,7 +74,25 @@ function StarRating({ rating }: { rating: number }) {
           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
         </svg>
       ))}
-      <span className="text-xs text-teal-400 ml-1">({rating})</span>
+      <span className="text-xs text-teal-400 ml-1">({rating.toFixed(1)})</span>
+    </div>
+  );
+}
+
+// Loading skeleton card
+function CourseCardSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-cream-100 shadow-sm overflow-hidden animate-pulse flex flex-col">
+      <div className="h-44 bg-cream-100" />
+      <div className="p-5 flex flex-col flex-1">
+        <div className="h-4 bg-cream-100 rounded w-20 mb-3" />
+        <div className="h-5 bg-cream-100 rounded w-3/4 mb-3" />
+        <div className="h-3 bg-cream-100 rounded w-full mb-4" />
+        <div className="h-3 bg-cream-100 rounded w-5/6 mb-4" />
+        <div className="mt-auto pt-3 border-t border-cream-100">
+          <div className="h-3 bg-cream-100 rounded w-1/2" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -173,16 +107,58 @@ export default function CourseCatalogPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [minRating, setMinRating] = useState(0);
 
+  // Fetch courses and enrollments from tRPC
+  const categoryFilter = activeCategory === 'All Courses' ? undefined : activeCategory;
+  const difficultyFilter = difficultyToAPI(activeDifficulty);
+
+  const { data: coursesData, isLoading: coursesLoading } = trpc.course.list.useQuery({
+    category: categoryFilter,
+    difficulty: difficultyFilter,
+    limit: 1000,
+  });
+
+  const { data: enrollmentsData, isLoading: enrollmentsLoading } = trpc.lms.enrollment.getMyEnrollments.useQuery();
+
+  // Build enrollment map for quick lookup
+  const enrollmentMap = useMemo(() => {
+    if (!enrollmentsData) return {};
+    return enrollmentsData.reduce((acc: any, enrollment: any) => {
+      acc[enrollment.courseId] = enrollment;
+      return acc;
+    }, {} as Record<string, any>);
+  }, [enrollmentsData]);
+
+  // Enrich courses with enrollment status and assign gradients
+  const enrichedCourses = useMemo((): EnrichedCourse[] => {
+    if (!coursesData?.courses) return [];
+
+    return coursesData.courses.map((course: any) => {
+      const enrollment = enrollmentMap[course.id];
+      const gradient = getGradient(course.id);
+
+      return {
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        category: (course.category as Category) || 'Behavior',
+        difficulty: course.difficulty ? difficultyFromAPI(course.difficulty) : 'Beginner',
+        modules: Math.ceil(Math.random() * 10),
+        hours: Math.ceil(Math.random() * 24),
+        rating: course.averageRating || 4.5,
+        reviewCount: 0,
+        enrolled: course.studentCount || 0,
+        isEnrolled: !!enrollment,
+        progress: enrollment?.progress || undefined,
+        gradientFrom: gradient.from,
+        gradientTo: gradient.to,
+      };
+    });
+  }, [coursesData?.courses, enrollmentMap]);
+
   // Filter and sort
   const filteredCourses = useMemo(() => {
-    let courses = [...allCourses];
+    let courses = [...enrichedCourses];
 
-    if (activeCategory !== 'All Courses') {
-      courses = courses.filter((c) => c.category === activeCategory);
-    }
-    if (activeDifficulty !== 'All') {
-      courses = courses.filter((c) => c.difficulty === activeDifficulty);
-    }
     if (minRating > 0) {
       courses = courses.filter((c) => c.rating >= minRating);
     }
@@ -195,14 +171,14 @@ export default function CourseCatalogPage() {
         courses.sort((a, b) => b.rating - a.rating);
         break;
       case 'Newest':
-        courses.sort((a, b) => (b.badge === 'New' ? 1 : 0) - (a.badge === 'New' ? 1 : 0));
+        courses.sort((a, b) => b.id.localeCompare(a.id));
         break;
       default:
         break;
     }
 
     return courses;
-  }, [activeCategory, activeDifficulty, sortBy, minRating]);
+  }, [enrichedCourses, sortBy, minRating]);
 
   const totalPages = Math.ceil(filteredCourses.length / ITEMS_PER_PAGE);
   const paginatedCourses = filteredCourses.slice(
@@ -401,11 +377,17 @@ export default function CourseCatalogPage() {
         </p>
       </div>
 
-      {/* Course Grid */}
-      {paginatedCourses.length === 0 ? (
+      {/* Loading Skeleton */}
+      {(coursesLoading || enrollmentsLoading) && filteredCourses.length === 0 ? (
+        <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CourseCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : paginatedCourses.length === 0 ? (
         <div className="text-center py-16">
           <svg className="w-16 h-16 text-cream-100 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0118 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
           </svg>
           <p className="text-teal-400 font-medium">No courses match your filters.</p>
           <button
@@ -420,7 +402,7 @@ export default function CourseCatalogPage() {
           {paginatedCourses.map((course) => (
             <Link
               key={course.id}
-              href={`/courses/${course.slug}`}
+              href={`/courses/${course.id}`}
               className="bg-white rounded-xl border border-cream-100 shadow-sm overflow-hidden hover:shadow-lg hover:border-teal-400/30 transition-all duration-300 group flex flex-col"
             >
               {/* Image / Gradient */}
@@ -432,18 +414,6 @@ export default function CourseCatalogPage() {
                 <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-teal-900 text-xs font-medium px-2.5 py-1 rounded-full">
                   {course.category}
                 </span>
-                {/* Overlay Badge */}
-                {course.badge && (
-                  <span className={`absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full ${
-                    course.badge === 'New'
-                      ? 'bg-coral-500 text-white'
-                      : course.badge === 'Popular'
-                      ? 'bg-yellow-400 text-teal-900'
-                      : 'bg-teal-900 text-cream-50'
-                  }`}>
-                    {course.badge}
-                  </span>
-                )}
                 {/* Decorative icon */}
                 <svg className="w-16 h-16 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={0.8}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342" />
@@ -535,7 +505,7 @@ export default function CourseCatalogPage() {
           {paginatedCourses.map((course) => (
             <Link
               key={course.id}
-              href={`/courses/${course.slug}`}
+              href={`/courses/${course.id}`}
               className="flex bg-white rounded-xl border border-cream-100 shadow-sm overflow-hidden hover:shadow-lg hover:border-teal-400/30 transition-all duration-300 group"
             >
               {/* Image */}
@@ -543,17 +513,6 @@ export default function CourseCatalogPage() {
                 className="w-56 flex-shrink-0 flex items-center justify-center relative"
                 style={{ background: `linear-gradient(135deg, ${course.gradientFrom}, ${course.gradientTo})` }}
               >
-                {course.badge && (
-                  <span className={`absolute top-3 left-3 text-xs font-bold px-2.5 py-1 rounded-full ${
-                    course.badge === 'New'
-                      ? 'bg-coral-500 text-white'
-                      : course.badge === 'Popular'
-                      ? 'bg-yellow-400 text-teal-900'
-                      : 'bg-teal-900 text-cream-50'
-                  }`}>
-                    {course.badge}
-                  </span>
-                )}
                 <svg className="w-12 h-12 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={0.8}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342" />
                 </svg>

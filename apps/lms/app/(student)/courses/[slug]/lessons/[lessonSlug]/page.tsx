@@ -1,71 +1,80 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-
-// Mock data
-const lessonData = {
-  id: 'heel-command-mastery',
-  title: 'Heel Command Mastery',
-  module: 'Module 2',
-  lessonNumber: 3,
-  duration: 45,
-  videoDuration: 18,
-  content: `
-    <p>The heel command is one of the most important foundational skills in dog training. A solid heel creates a strong working relationship between handler and dog, ensuring safety in public spaces and building the dog's focus and responsiveness.</p>
-
-    <h2>Understanding the Heel Position</h2>
-    <p>The heel position means the dog walks beside you with their shoulder aligned with your leg. The dog's head should be level with your knee, and they should maintain this position regardless of your pace or direction changes. This position requires the dog to stay aware of your movement and adjust accordingly.</p>
-
-    <h2>Building Foundation Through Luring</h2>
-    <p>Begin by luring your dog into the heel position using high-value treats. Hold the treat close to your leg at their nose height and move forward. Reward frequently during these early sessions—every few steps at first. Consistency is critical; always practice on the same side (typically the left) until the behavior is solid before introducing variation.</p>
-
-    <h2>Introducing Distance and Duration</h2>
-    <p>Once your dog understands the basic position, gradually increase the distance and time they maintain the heel. Start with 10-foot sessions and extend to full-length walks. Layer in distractions slowly—first indoors, then in quiet outdoor spaces, then busier environments. Remember that each new environment is essentially a new training scenario for your dog.</p>
-  `,
-  isCompleted: false,
-  resources: [
-    { title: 'Stress Signals Reference Card', type: 'PDF' },
-    { title: 'Calming Signals Checklist', type: 'Checklist' },
-  ],
-};
-
-const courseNav = {
-  courseTitle: 'Advanced Obedience Training',
-  courseSlug: 'advanced-obedience-training',
-  modules: [
-    {
-      title: 'Module 1: Sit & Stay Foundation',
-      lessons: [
-        { id: 'sit-basics', title: 'Sit Command Basics', completed: true },
-        { id: 'sit-duration', title: 'Building Sit Duration', completed: true },
-        { id: 'stay-introduction', title: 'Stay Introduction', completed: true },
-      ],
-    },
-    {
-      title: 'Module 2: Leash Work & Heel',
-      lessons: [
-        { id: 'loose-leash', title: 'Loose Leash Walking', completed: true },
-        { id: 'vocal-communication', title: 'Vocal Communication Patterns', completed: true },
-        { id: 'heel-command-mastery', title: 'Heel Command Mastery', completed: false, current: true },
-        { id: 'communication-worksheet', title: 'Communication Worksheet', completed: false },
-      ],
-    },
-  ],
-  prevLesson: { id: 'vocal-communication', title: 'Vocal Communication Patterns' },
-  nextLesson: { id: 'communication-worksheet', title: 'Communication Worksheet' },
-};
-
-const progress = {
-  completionPercent: 62,
-  lessonsCompleted: 5,
-  totalLessons: 8,
-  timeSpent: '2h 34m',
-  estimatedRemaining: '1h 45m',
-};
+import { useParams } from 'next/navigation';
+import { trpc } from '@/lib/trpc';
 
 export default function LessonPage() {
-  const [isCompleted, setIsCompleted] = useState(lessonData.isCompleted);
+  const params = useParams();
+  const courseId = params.slug as string;
+  const lessonId = params.lessonSlug as string;
+
+  // Fetch lesson data
+  const { data, isLoading, error } = trpc.lms.lesson.getLesson.useQuery({ lessonId });
+
+  // Mark complete mutation
+  const utils = trpc.useUtils();
+  const markCompleteMutation = trpc.lms.lesson.markComplete.useMutation({
+    onSuccess: () => {
+      utils.lms.lesson.getLesson.invalidate({ lessonId });
+    },
+  });
+
+  // Derive previous and next lessons from course data
+  const allLessons = data?.course?.modules
+    ?.flatMap((module: any) => module.lessons || [])
+    .map((lesson: any, idx: any) => ({ ...lesson, index: idx })) || [];
+
+  const currentLessonIndex = allLessons.findIndex((l: any) => l.id === lessonId);
+  const prevLesson = currentLessonIndex > 0 ? allLessons[currentLessonIndex - 1] : null;
+  const nextLesson = currentLessonIndex >= 0 && currentLessonIndex < allLessons.length - 1
+    ? allLessons[currentLessonIndex + 1]
+    : null;
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-cream-50 px-6 py-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex gap-8">
+            <div className="flex-1">
+              <div className="aspect-video bg-cream-100 rounded-xl animate-pulse mb-8" />
+              <div className="h-10 bg-cream-100 rounded animate-pulse mb-4" />
+              <div className="h-4 bg-cream-100 rounded animate-pulse mb-8 w-1/3" />
+              <div className="space-y-4">
+                <div className="h-4 bg-cream-100 rounded animate-pulse" />
+                <div className="h-4 bg-cream-100 rounded animate-pulse" />
+                <div className="h-4 bg-cream-100 rounded animate-pulse w-2/3" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !data?.lesson) {
+    return (
+      <div className="min-h-screen bg-cream-50 px-6 py-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-xl p-8 border border-cream-100">
+            <h1 className="text-2xl font-heading font-bold text-teal-900 mb-2">Lesson Not Found</h1>
+            <p className="text-teal-700 mb-6">This lesson could not be loaded. Please try again or return to your courses.</p>
+            <Link href="/courses" className="text-coral-500 hover:text-coral-700 font-medium transition-colors">
+              Back to Courses
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const lesson = data.lesson;
+  const module = data.module;
+  const course = data.course;
+  const resources = data.resources || [];
+  const progress = data.progress;
 
   return (
     <div className="min-h-screen bg-cream-50 px-6 py-8">
@@ -76,11 +85,11 @@ export default function LessonPage() {
           <span className="text-teal-400">/</span>
           <Link href="/courses" className="text-coral-500 hover:text-coral-700 transition-colors">My Courses</Link>
           <span className="text-teal-400">/</span>
-          <Link href={`/courses/${courseNav.courseSlug}`} className="text-coral-500 hover:text-coral-700 transition-colors">
-            {courseNav.courseTitle}
+          <Link href={`/courses/${courseId}`} className="text-coral-500 hover:text-coral-700 transition-colors">
+            {course?.title}
           </Link>
           <span className="text-teal-400">/</span>
-          <span className="text-teal-900 font-medium">{lessonData.title}</span>
+          <span className="text-teal-900 font-medium">{lesson.title}</span>
         </nav>
 
         {/* Main Layout */}
@@ -88,39 +97,71 @@ export default function LessonPage() {
           {/* Left Column - Main Content (65%) */}
           <div className="flex-1">
             {/* Video Player */}
-            <div className="aspect-video bg-teal-900 rounded-xl flex items-center justify-center mb-8 shadow-lg">
-              <div className="text-center">
-                <button className="w-20 h-20 bg-coral-500 hover:bg-coral-700 rounded-full flex items-center justify-center transition-colors shadow-xl">
-                  <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </button>
-                <p className="text-cream-50/70 text-sm mt-4">{lessonData.videoDuration} min</p>
+            {lesson.videoUrl ? (
+              <div className="aspect-video bg-teal-900 rounded-xl overflow-hidden mb-8 shadow-lg">
+                <video
+                  src={lesson.videoUrl}
+                  controls
+                  className="w-full h-full"
+                  onPlay={() => {
+                    // Track video progress on play
+                    const handleTimeUpdate = (e: any) => {
+                      const video = e.target as HTMLVideoElement;
+                      if (video.duration) {
+                        const watchedPct = Math.round((video.currentTime / video.duration) * 100);
+                        if (watchedPct % 10 === 0) {
+                          // Update every 10%
+                          markCompleteMutation.mutate({ lessonId });
+                        }
+                      }
+                    };
+                    const videoElement = document.querySelector('video');
+                    if (videoElement) {
+                      videoElement.addEventListener('timeupdate', handleTimeUpdate);
+                    }
+                  }}
+                />
               </div>
-            </div>
+            ) : (
+              <div className="aspect-video bg-teal-900 rounded-xl flex items-center justify-center mb-8 shadow-lg">
+                <div className="text-center">
+                  <svg className="w-16 h-16 text-cream-50/40 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-3-3m3 3l3-3M3 15h18a3 3 0 003-3V3a3 3 0 00-3-3H3a3 3 0 00-3 3v9a3 3 0 003 3z" />
+                  </svg>
+                  <p className="text-cream-50/70 text-sm">No video available for this lesson</p>
+                </div>
+              </div>
+            )}
 
             {/* Lesson Title & Info */}
-            <h1 className="text-4xl font-heading font-bold text-teal-900 mb-2">{lessonData.title}</h1>
-            <p className="text-teal-400 text-sm mb-8">{lessonData.module} · Lesson {lessonData.lessonNumber} · {lessonData.duration} minutes</p>
+            <h1 className="text-4xl font-heading font-bold text-teal-900 mb-2">{lesson.title}</h1>
+            <p className="text-teal-400 text-sm mb-8">
+              {module?.title} · {lesson.duration ? `${lesson.duration} minutes` : 'Duration not specified'}
+            </p>
 
             {/* Lesson Content */}
-            <div
-              className="prose prose-sm max-w-none text-teal-900 mb-8
-                prose-headings:font-heading prose-headings:text-teal-900
-                prose-h2:text-2xl prose-h2:font-bold prose-h2:mt-8 prose-h2:mb-4
-                prose-p:text-teal-700 prose-p:leading-relaxed prose-p:mb-5
-                prose-a:text-teal-700 prose-a:underline hover:prose-a:text-teal-900"
-              dangerouslySetInnerHTML={{ __html: lessonData.content }}
-            />
+            {lesson.content && (
+              <div
+                className="prose prose-sm max-w-none text-teal-900 mb-8
+                  prose-headings:font-heading prose-headings:text-teal-900
+                  prose-h2:text-2xl prose-h2:font-bold prose-h2:mt-8 prose-h2:mb-4
+                  prose-p:text-teal-700 prose-p:leading-relaxed prose-p:mb-5
+                  prose-a:text-teal-700 prose-a:underline hover:prose-a:text-teal-900"
+                dangerouslySetInnerHTML={{ __html: lesson.content }}
+              />
+            )}
 
             {/* Lesson Resources */}
-            {lessonData.resources.length > 0 && (
+            {resources.length > 0 && (
               <div className="mb-8">
                 <h3 className="font-heading font-bold text-teal-900 text-lg mb-4">Lesson Resources</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {lessonData.resources.map((resource) => (
-                    <button
-                      key={resource.title}
+                  {resources.map((resource: any) => (
+                    <a
+                      key={resource.id}
+                      href={resource.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="flex items-center gap-4 p-4 rounded-xl bg-white border border-cream-100 hover:border-teal-400 hover:shadow-md transition-all text-left"
                     >
                       <div className="w-10 h-10 bg-teal-50 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -130,9 +171,12 @@ export default function LessonPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-teal-900 truncate">{resource.title}</p>
-                        <p className="text-xs text-teal-400">{resource.type}</p>
+                        <p className="text-xs text-teal-400">
+                          {resource.type}
+                          {resource.fileSizeBytes && ` · ${(resource.fileSizeBytes / 1024 / 1024).toFixed(1)} MB`}
+                        </p>
                       </div>
-                    </button>
+                    </a>
                   ))}
                 </div>
               </div>
@@ -140,35 +184,36 @@ export default function LessonPage() {
 
             {/* Bottom Navigation */}
             <div className="flex items-center justify-between gap-4 border-t border-cream-100 pt-8 mt-12">
-              {courseNav.prevLesson ? (
+              {prevLesson ? (
                 <Link
-                  href={`/courses/${courseNav.courseSlug}/lessons/${courseNav.prevLesson.id}`}
+                  href={`/courses/${courseId}/lessons/${prevLesson.id}`}
                   className="flex items-center gap-2 text-sm text-teal-700 hover:text-teal-900 transition-colors group"
                 >
                   <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                   </svg>
-                  <span>Previous: {courseNav.prevLesson.title}</span>
+                  <span>Previous: {prevLesson.title}</span>
                 </Link>
               ) : <div />}
 
               <button
-                onClick={() => setIsCompleted(!isCompleted)}
+                onClick={() => markCompleteMutation.mutate({ lessonId })}
+                disabled={markCompleteMutation.isPending}
                 className={`px-8 py-3 rounded-lg font-heading font-medium text-sm transition-all whitespace-nowrap ${
-                  isCompleted
+                  progress?.completed
                     ? 'bg-teal-700 text-cream-50 hover:bg-teal-800'
-                    : 'bg-coral-500 text-white hover:bg-coral-700 shadow-md'
+                    : 'bg-coral-500 text-white hover:bg-coral-700 shadow-md disabled:opacity-50'
                 }`}
               >
-                {isCompleted ? 'Completed ✓' : 'Mark Complete'}
+                {markCompleteMutation.isPending ? 'Marking...' : progress?.completed ? 'Completed ✓' : 'Mark Complete'}
               </button>
 
-              {courseNav.nextLesson ? (
+              {nextLesson ? (
                 <Link
-                  href={`/courses/${courseNav.courseSlug}/lessons/${courseNav.nextLesson.id}`}
+                  href={`/courses/${courseId}/lessons/${nextLesson.id}`}
                   className="flex items-center gap-2 text-sm text-teal-700 hover:text-teal-900 transition-colors group"
                 >
-                  <span>Next: {courseNav.nextLesson.title}</span>
+                  <span>Next: {nextLesson.title}</span>
                   <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                   </svg>
@@ -183,81 +228,92 @@ export default function LessonPage() {
             <div className="bg-white rounded-xl border border-cream-100 shadow-sm sticky top-8 mb-6">
               <div className="p-5 border-b border-cream-100">
                 <h3 className="font-heading font-bold text-teal-900 text-sm truncate">
-                  {courseNav.courseTitle}
+                  {course?.title}
                 </h3>
               </div>
               <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
-                {courseNav.modules.map((module, moduleIdx) => (
-                  <div key={module.title}>
+                {course?.modules?.map((module: any) => (
+                  <div key={module.id}>
                     <div className="px-5 py-3 bg-teal-50 border-b border-cream-100">
                       <p className="text-xs font-medium text-teal-700">{module.title}</p>
                     </div>
-                    {module.lessons.map((lesson) => (
-                      <Link
-                        key={lesson.id}
-                        href={`/courses/${courseNav.courseSlug}/lessons/${lesson.id}`}
-                        className={`flex items-center gap-3 px-5 py-3 text-sm border-b border-cream-100 transition-colors ${
-                          lesson.current
-                            ? 'bg-coral-500/5 border-l-4 border-l-coral-500 pl-4'
-                            : 'hover:bg-cream-50'
-                        }`}
-                      >
-                        {/* Completion Indicator */}
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
-                          lesson.completed
-                            ? 'bg-teal-700 text-cream-50'
-                            : lesson.current
-                            ? 'ring-2 ring-coral-500 bg-coral-500/10'
-                            : 'border-2 border-cream-200'
-                        }`}>
-                          {lesson.completed && (
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className={`truncate text-xs ${
-                          lesson.current ? 'text-coral-500 font-semibold' : lesson.completed ? 'text-teal-400' : 'text-teal-900'
-                        }`}>
-                          {lesson.title}
-                        </span>
-                      </Link>
-                    ))}
+                    {module.lessons?.map((moduleLesson: any) => {
+                      const isCurrentLesson = moduleLesson.id === lessonId;
+                      return (
+                        <Link
+                          key={moduleLesson.id}
+                          href={`/courses/${courseId}/lessons/${moduleLesson.id}`}
+                          className={`flex items-center gap-3 px-5 py-3 text-sm border-b border-cream-100 transition-colors ${
+                            isCurrentLesson
+                              ? 'bg-coral-500/5 border-l-4 border-l-coral-500 pl-4'
+                              : 'hover:bg-cream-50'
+                          }`}
+                        >
+                          {/* Completion Indicator */}
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                            moduleLesson.completed
+                              ? 'bg-teal-700 text-cream-50'
+                              : isCurrentLesson
+                              ? 'ring-2 ring-coral-500 bg-coral-500/10'
+                              : 'border-2 border-cream-200'
+                          }`}>
+                            {moduleLesson.completed && (
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`truncate text-xs ${
+                            isCurrentLesson ? 'text-coral-500 font-semibold' : moduleLesson.completed ? 'text-teal-400' : 'text-teal-900'
+                          }`}>
+                            {moduleLesson.title}
+                          </span>
+                        </Link>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Your Progress Card */}
-            <div className="bg-teal-700 text-cream-50 rounded-xl p-5 sticky top-96">
-              <h3 className="font-heading font-bold text-lg mb-5">Your Progress</h3>
+            {data && (
+              <div className="bg-teal-700 text-cream-50 rounded-xl p-5 sticky top-96">
+                <h3 className="font-heading font-bold text-lg mb-5">Your Progress</h3>
 
-              {/* Progress Bar */}
-              <div className="mb-5">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium">{progress.completionPercent}% Complete</p>
-                  <p className="text-xs opacity-80">{progress.lessonsCompleted}/{progress.totalLessons} lessons</p>
+                {/* Progress Bar */}
+                <div className="mb-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium">{Math.round((data.course?.modules?.reduce((acc: any, m: any) => acc + (m.lessons?.length || 0), 0) || 0) > 0 ? (allLessons.filter((l: any) => l.completed).length / allLessons.length) * 100 : 0)}% Complete</p>
+                    <p className="text-xs opacity-80">{allLessons.filter((l: any) => l.completed).length}/{allLessons.length} lessons</p>
+                  </div>
+                  <div className="w-full h-3 bg-teal-600 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-coral-500 transition-all duration-500"
+                      style={{
+                        width: allLessons.length > 0
+                          ? `${(allLessons.filter((l: any) => l.completed).length / allLessons.length) * 100}%`
+                          : '0%'
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full h-3 bg-teal-600 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-coral-500 transition-all duration-500"
-                    style={{ width: `${progress.completionPercent}%` }}
-                  />
+
+                {/* Stats */}
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="opacity-90">Current lesson</span>
+                    <span className="font-semibold text-xs">{progress?.completed ? 'Completed' : 'In Progress'}</span>
+                  </div>
+                  {progress?.completedAt && (
+                    <div className="flex justify-between items-center">
+                      <span className="opacity-90">Completed</span>
+                      <span className="font-semibold text-xs">{new Date(progress.completedAt).toLocaleDateString()}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Stats */}
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="opacity-90">Time spent</span>
-                  <span className="font-semibold">{progress.timeSpent}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="opacity-90">Est. remaining</span>
-                  <span className="font-semibold">{progress.estimatedRemaining}</span>
-                </div>
-              </div>
-            </div>
+            )}
           </aside>
         </div>
       </div>
