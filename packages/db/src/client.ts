@@ -10,3 +10,22 @@ export * from './auth-helpers';
 
 // Types (safe for both client and server)
 export * from './types';
+
+// Re-export commonly used Firestore client functions
+export {
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  writeBatch,
+  Timestamp,
+  addDoc,
+  onSnapshot,
+} from 'firebase/firestore';
